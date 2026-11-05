@@ -1,0 +1,16 @@
+{
+  "name": "geoguessr-helper",
+  "version": "1.0.0",
+  "description": "Narrow down GeoGuessr locations with a questionnaire built from Plonk It guides",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "scrape": "node scraper/scrape.mjs",
+    "build": "node scraper/build.mjs",
+    "update": "node scraper/scrape.mjs && node scraper/build.mjs",
+    "start": "node server.mjs"
+  }
+}

@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Plonk Helper</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo" aria-hidden="true">◎</span>
+        <div>
+          <h1>Plonk Helper</h1>
+          <p class="sub" id="dataStamp">Loading Plonk It data…</p>
+        </div>
+      </div>
+      <button class="btn ghost" id="resetBtn" type="button">Start over</button>
+    </header>
+
+    <main class="layout">
+      <section class="col-left">
+        <article class="card question-card" id="questionCard" aria-live="polite"></article>
+
+        <article class="card">
+          <h2 class="card-title">Your answers</h2>
+          <ul class="answers" id="answers"></ul>
+          <p class="muted empty" id="answersEmpty">Nothing answered yet. Every answer reshapes the ranking on the right.</p>
+        </article>
+
+        <article class="card">
+          <h2 class="card-title">Search Plonk It tips</h2>
+          <p class="muted">Spotted something specific? Search every guide, then add it as a clue.</p>
+          <form class="search" id="searchForm">
+            <input id="searchInput" type="search" placeholder="e.g. red reflector, ladder pole, kerb" autocomplete="off" />
+            <button class="btn" type="submit">Search</button>
+          </form>
+          <div id="searchResults"></div>
+        </article>
+      </section>
+
+      <section class="col-right">
+        <article class="card">
+          <div class="card-head">
+            <h2 class="card-title">Most likely countries</h2>
+            <span class="muted small" id="candidateMeta"></span>
+          </div>
+          <ol class="ranking" id="ranking"></ol>
+        </article>
+      </section>
+    </main>
+
+    <dialog id="countryDialog" class="dialog">
+      <div class="dialog-body" id="countryBody"></div>
+    </dialog>
+
+    <footer class="footer">
+      Clues and images from <a href="https://www.plonkit.net" target="_blank" rel="noopener">Plonk It</a>.
+      Ranking is a study aid, not an answer key.
+    </footer>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
