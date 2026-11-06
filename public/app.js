@@ -264,7 +264,7 @@ function renderQuestion(ranked) {
 
   const answeredCount = Object.keys(state.answers).length;
   const totalCount = db.questions.filter((x) => isVisible(x, state.answers)).length;
-  const sourceBadge = q.source === "plonkit"
+  const sourceBadge = q.source === "plonkit" && !q.badge
     ? el("span", { class: "badge plonk", title: "Matched against Plonk It guide text" }, "From Plonk It guides")
     : el("span", { class: "badge core", title: "Curated fundamentals" }, q.badge || "Core fact");
 

@@ -379,6 +379,27 @@ export const QUESTIONS = [
     ],
   },
   {
+    id: "houses",
+    none: true, // plain rendered houses with dark roofs still say something
+    text: "What are the houses like?",
+    help: "Tick everything you can see on nearby houses, or \"None of these\" if houses are clearly visible but match none of them. Skip it if there are no houses.",
+    type: "multi",
+    source: "plonkit",
+    badge: "Rough estimate",
+    // Guides rarely describe ordinary houses, and mention them in comparisons
+    // ("unlike Peru, ..."), so the hand-entered levels in countries.mjs decide;
+    // matching tips are shown as evidence only.
+    options: [
+      { id: "tileroof", prevalence: "tileroof", guideFallback: false, label: "Red / orange tiled roofs", patterns: ["(red|terracotta|orange|clay)[- ](tiled? )?roofs?", "roof tiles?", "tiled roofs?"] },
+      { id: "metalroof", prevalence: "metalroof", guideFallback: false, label: "Corrugated metal roofs", patterns: ["(corrugated|tin|metal|iron|zinc|sheet)[- ](metal |iron )?roofs?", "corrugated (iron|metal|sheets?)"] },
+      { id: "flatroof", prevalence: "flatroof", guideFallback: false, label: "Flat concrete roofs", patterns: ["flat[- ]roof", "flat roofs?"] },
+      { id: "rebar", prevalence: "rebar", guideFallback: false, label: "Unfinished upper floors / rebar sticking out", patterns: ["rebar", "unfinished (houses?|buildings?|homes?|(upper )?floors?)", "(exposed|protruding) (steel|metal|reinforcement)"] },
+      { id: "woodhouse", prevalence: "woodhouse", guideFallback: false, label: "Wooden houses", patterns: ["wooden (houses?|homes?|buildings?|cabins?)", "timber (houses?|homes?|buildings?)", "wood(en)? (siding|cladding)"] },
+      { id: "brick", prevalence: "brick", guideFallback: false, label: "Bare brick walls", patterns: ["(red|exposed|bare|unplastered|orange) bricks?", "brick (houses?|homes?|buildings?)"] },
+      { id: "compound", prevalence: "compound", guideFallback: false, label: "High walls or gates around houses", patterns: ["(walled|walls?) (compounds?|around)", "(high|tall|boundary|perimeter) walls?", "(gated|fenced) (houses?|compounds?|properties)"] },
+    ],
+  },
+  {
     id: "poles",
     text: "What are the utility poles made of?",
     type: "multi",
