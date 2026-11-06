@@ -10,6 +10,7 @@
   --accent-soft: #e2f4e9;
   --yes: #2f9e5f;
   --no: #c4453c;
+  --danger: #c62f2f;
   --maybe: #b5891c;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 4px 16px rgb(0 0 0 / 0.04);
   --radius: 14px;
@@ -29,6 +30,7 @@
     --accent-soft: #183526;
     --yes: #4cc27f;
     --no: #e7695f;
+    --danger: #d43b33;
     --maybe: #d9ab3d;
     --shadow: none;
     color-scheme: dark;
@@ -122,6 +124,7 @@ h1, h2, h3 { margin: 0; line-height: 1.25; }
   white-space: nowrap;
 }
 .btn.small { padding: 4px 10px; font-size: 13px; }
+.btn.danger { background: var(--danger); border-color: var(--danger); color: #ffffff; }
 .btn.ghost { background: transparent; color: var(--text); border-color: var(--border); font-weight: 500; }
 .btn:disabled { opacity: 0.5; cursor: default; }
 .btn:not(:disabled):hover { filter: brightness(1.05); }

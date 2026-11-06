@@ -2,7 +2,7 @@
 
 A GeoGuessr study aid that narrows down where a Street View image is, using the
 country guides from [Plonk It](https://www.plonkit.net). Answer a few questions
-about what you see and it ranks the 67 most commonly seen countries, showing the
+about what you see and it ranks 68 commonly seen countries, showing the
 Plonk It tips behind each match.
 
 No dependencies — just Node 20.11+.

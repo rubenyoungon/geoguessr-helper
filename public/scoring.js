@@ -88,7 +88,9 @@ export function hasEvidence(db, questionId, optionId, slug) {
 export const PREVALENCE = { widespread: 1, common: 0.6, regional: 0.3, none: 0.1 };
 
 export function prevalenceLevel(db, country, question, option) {
-  return country[option.prevalence] ?? (hasEvidence(db, question.id, option.id, country.slug) ? "regional" : "none");
+  if (country[option.prevalence]) return country[option.prevalence];
+  if (option.guideFallback === false) return "none";
+  return hasEvidence(db, question.id, option.id, country.slug) ? "regional" : "none";
 }
 
 function minedLikelihood(db, country, question, option) {
@@ -101,10 +103,44 @@ function minedLikelihood(db, country, question, option) {
   return LIKELIHOOD.minedMiss;
 }
 
+// ---------- "None of these" on multi-choice questions ----------
+//
+// A multi question answered with an empty list means "I looked and saw none
+// of these". Each option has a chance of being visible at a random spot in a
+// country, proportional to the likelihood used when it *is* ticked, so ticking
+// and not ticking tell the same story. Kept small: one spot shows little.
+// A guide mention is often regional ("rice fields in the Ebro delta"), so it
+// only implies a small chance of seeing the clue at a random spot.
+export const SEE_SCALE = { prevalence: 0.5, mined: 0.1 };
+
+export function seeProbability(db, country, question, option) {
+  const scale = option.prevalence ? SEE_SCALE.prevalence : SEE_SCALE.mined;
+  return scale * minedLikelihood(db, country, question, option);
+}
+
+export const isNoneAnswer = (q, ans) => q.type === "multi" && Array.isArray(ans) && ans.length === 0;
+
+export function noneLikelihood(db, country, question) {
+  return question.options.reduce((p, o) => p * (1 - seeProbability(db, country, question, o)), 1);
+}
+
 export function optionLikelihood(db, country, question, option, confidence) {
   return question.source === "curated"
     ? curatedLikelihood(country, question, option, confidence)
     : minedLikelihood(db, country, question, option);
+}
+
+// Single-choice questions with `multiple: true` let the player pick several
+// options when unsure (e.g. two continents). The best-fitting one counts.
+export function bestOption(db, country, question, ans, confidence) {
+  let best = null;
+  for (const oid of asArray(ans)) {
+    const option = question.options.find((o) => o.id === oid);
+    if (!option) continue;
+    const lik = optionLikelihood(db, country, question, option, confidence);
+    if (!best || lik > best.lik) best = { option, lik };
+  }
+  return best;
 }
 
 // answers: { [questionId]: optionId | optionId[] | { [axisId]: 0-100 } }
@@ -119,6 +155,16 @@ export function rank(db, answers, clues = [], confidence = {}) {
       if (!q) continue;
       if (q.type === "sliders") {
         if (isSliderReading(q, ans)) p *= slidersLikelihood(country, q, ans, confidence[qid]);
+        continue;
+      }
+      if (isNoneAnswer(q, ans)) {
+        p *= noneLikelihood(db, country, q);
+        continue;
+      }
+      if (q.multiple) {
+        // "Any of these": a country only needs to fit one picked option.
+        const best = bestOption(db, country, q, ans, confidence[qid]);
+        if (best) p *= best.lik;
         continue;
       }
       for (const oid of asArray(ans)) {
@@ -138,8 +184,10 @@ export function rank(db, answers, clues = [], confidence = {}) {
 const entropy = (probs) => -probs.reduce((h, p) => (p > 0 ? h + p * Math.log2(p) : h), 0);
 
 // Expected information gain (bits) from asking a question, given the current
-// posterior. Single-choice options are treated as mutually exclusive outcomes;
-// multi-choice options as independent yes/no observations.
+// posterior. Single-choice options are treated as mutually exclusive outcomes.
+// Multi-choice questions with a "None" answer are modelled as "you'll tick
+// option X" or "you'll see none of them", using the same visibility chances
+// the ranking uses; without one, only ticks carry information.
 export function informationGain(db, question, ranked) {
   const prior = ranked.map((r) => r.prob);
   const h0 = entropy(prior);
@@ -154,10 +202,11 @@ export function informationGain(db, question, ranked) {
     ? [readings.map((reading) => ranked.map((r) => slidersLikelihood(r.country, question, reading)))]
     : question.type === "single"
     ? [question.options.map((o) => ranked.map((r) => optionLikelihood(db, r.country, question, o)))]
-    : question.options.map((o) => {
-        const yes = ranked.map((r) => (optionLikelihood(db, r.country, question, o) >= 1 ? 0.6 : 0.15));
-        return [yes, yes.map((y) => 1 - y)];
-      });
+    : [[
+        ...question.options.map((o) => ranked.map((r) => seeProbability(db, r.country, question, o))),
+        // Without a "None" button, seeing nothing is a skip: same for every country.
+        ranked.map((r) => (question.none ? noneLikelihood(db, r.country, question) : 1)),
+      ]];
 
   let gain = 0;
   for (const liks of outcomes) {

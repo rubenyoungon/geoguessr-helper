@@ -1,4 +1,4 @@
-import { rank, nextQuestion, optionLikelihood, hasEvidence, isVisible, asArray, missLikelihood, isSliderReading, prevalenceLevel, LIKELIHOOD } from "./scoring.js";
+import { rank, nextQuestion, optionLikelihood, bestOption, hasEvidence, isVisible, asArray, missLikelihood, isSliderReading, prevalenceLevel, isNoneAnswer, noneLikelihood, seeProbability, LIKELIHOOD } from "./scoring.js";
 
 const STORAGE_KEY = "plonk-helper-state-v1";
 const TOP_N = 15;
@@ -217,6 +217,14 @@ function backButton() {
   }, "← Back");
 }
 
+function startOver() {
+  state = freshState();
+  draftFor = null;
+  $("#searchInput").value = "";
+  $("#searchResults").replaceChildren();
+  update();
+}
+
 function renderQuestion(ranked) {
   const card = $("#questionCard");
   card.replaceChildren();
@@ -235,7 +243,10 @@ function renderQuestion(ranked) {
       el("h2", { class: "q-text" }, "No more questions to ask."),
       el("p", { class: "muted" }, "Check the ranking, open a country to compare its Plonk It clues, or search the guides for something specific you spotted."),
     );
-    const actions = el("div", { class: "q-actions" }, backButton());
+    const actions = el("div", { class: "q-actions" },
+      el("button", { class: "btn danger", type: "button", onclick: startOver }, "Start new round"),
+      backButton(),
+    );
     if (state.skipped.length) {
       actions.append(el("button", { class: "btn ghost", type: "button", onclick: () => { state.skipped = []; syncHistory(); update(); } }, "Revisit skipped questions"));
     }
@@ -247,18 +258,19 @@ function renderQuestion(ranked) {
     const prev = state.answers[q.id];
     draftFor = q.id;
     draftSingle = typeof prev === "string" ? prev : null;
-    draftMulti = new Set(Array.isArray(prev) ? prev : []);
+    draftMulti = new Set(q.multiple ? asArray(prev) : Array.isArray(prev) ? prev : []);
     draftSliders = isSliderReading(q, prev) ? { ...prev } : {};
   }
 
   const answeredCount = Object.keys(state.answers).length;
+  const totalCount = db.questions.filter((x) => isVisible(x, state.answers)).length;
   const sourceBadge = q.source === "plonkit"
     ? el("span", { class: "badge plonk", title: "Matched against Plonk It guide text" }, "From Plonk It guides")
     : el("span", { class: "badge core", title: "Curated fundamentals" }, q.badge || "Core fact");
 
   card.append(
     el("div", { class: "q-head" },
-      el("p", { class: "eyebrow" }, q.id in state.answers ? "Editing answer" : `Question ${answeredCount + 1}${gain != null ? " · suggested" : ""}`),
+      el("p", { class: "eyebrow" }, q.id in state.answers ? "Editing answer" : `Question ${answeredCount + state.skipped.length + 1} of ${totalCount}${gain != null ? " · suggested" : ""}`),
       sourceBadge,
     ),
     el("h2", { class: "q-text" }, q.text),
@@ -272,7 +284,7 @@ function renderQuestion(ranked) {
       draftSliders[axis.id] ??= SLIDER_DEFAULT;
       opts.append(axisSlider(axis, draftSliders[axis.id], (v) => (draftSliders[axis.id] = v)));
     }
-  } else if (q.type === "single") {
+  } else if (q.type === "single" && !q.multiple) {
     for (const o of q.options) {
       const selected = draftSingle === o.id;
       opts.append(el("button", {
@@ -307,7 +319,7 @@ function renderQuestion(ranked) {
   if (q.type !== "sliders") card.append(opts);
 
   const draft = q.type === "sliders" ? { ...draftSliders }
-    : q.type === "multi" ? (draftMulti.size ? [...draftMulti] : null)
+    : q.type === "multi" || q.multiple ? (draftMulti.size ? [...draftMulti] : null)
     : draftSingle;
   const actions = el("div", { class: "q-actions" },
     backButton(),
@@ -319,7 +331,15 @@ function renderQuestion(ranked) {
       onclick: () => answer(q.id, draft),
     }, "Next →"),
   );
-  actions.append(el("button", { class: "btn ghost", type: "button", onclick: () => skip(q.id) }, q.type === "multi" ? "None / can't tell" : "Skip / can't tell"));
+  if (q.type === "multi" && q.none) {
+    actions.append(el("button", {
+      class: "btn ghost",
+      type: "button",
+      title: "You could see clearly and none of these are there",
+      onclick: () => answer(q.id, []),
+    }, "None of these"));
+  }
+  actions.append(el("button", { class: "btn ghost", type: "button", onclick: () => skip(q.id) }, q.type === "multi" ? "Can't tell" : "Skip / can't tell"));
 
   const others = db.questions.filter((x) => x.id !== q.id && !(x.id in state.answers) && isVisible(x, state.answers));
   if (others.length) {
@@ -340,7 +360,9 @@ function renderAnswers() {
   for (const [qid, ans] of entries) {
     const q = questionById(qid);
     if (!q) continue;
-    const label = el("span", { class: "answer-a" }, q.type === "sliders" ? describeReading(q, ans) : asArray(ans).map((a) => optionLabel(q, a)).join(", "));
+    const label = el("span", { class: "answer-a" }, q.type === "sliders" ? describeReading(q, ans)
+      : isNoneAnswer(q, ans) ? "None of these"
+      : asArray(ans).map((a) => optionLabel(q, a)).join(", "));
     const sliders = q.type === "sliders"
       ? el("div", { class: "axes compact" }, q.axes.map((axis) => axisSlider(axis, ans[axis.id], (v) => {
           ans[axis.id] = v;
@@ -383,6 +405,12 @@ function renderAnswers() {
     ));
   }
   $("#answersEmpty").hidden = entries.length + state.clues.length + state.skipped.length > 0;
+
+  // Follow-up questions (e.g. Cyrillic letters) only count once they apply.
+  const visible = db.questions.filter((q) => isVisible(q, state.answers));
+  const answered = visible.filter((q) => q.id in state.answers).length;
+  const skipped = visible.filter((q) => state.skipped.includes(q.id)).length;
+  $("#answersMeta").textContent = `${answered} of ${visible.length} answered` + (skipped ? ` · ${skipped} skipped` : "");
 }
 
 function renderRanking(ranked) {
@@ -432,7 +460,9 @@ function tipCard(slug, tip) {
 const PREVALENCE_VERDICT = {
   widespread: { cls: "yes", sym: "✓" },
   common: { cls: "yes", sym: "✓" },
-  regional: { cls: "maybe", sym: "~" },
+  // The country has it, just not everywhere: still a fit. The row's text
+  // says "regional", and the score boost is smaller than for widespread.
+  regional: { cls: "yes", sym: "✓" },
   none: { cls: "no", sym: "✗" },
 };
 
@@ -485,7 +515,30 @@ function openCountry(slug) {
       why.append(row);
       continue;
     }
-    for (const oid of asArray(ans)) {
+    if (isNoneAnswer(q, ans)) {
+      any = true;
+      const lik = noneLikelihood(db, country, q);
+      // Every option keeps a small chance of showing up anywhere, so even a
+      // perfect fit lands around 0.8 on a four-option question.
+      const v = lik >= 0.7 ? { cls: "yes", sym: "✓" } : lik >= 0.45 ? { cls: "maybe", sym: "~" } : { cls: "no", sym: "✗" };
+      const row = el("details", { class: `why-row ${v.cls}` },
+        el("summary", {}, el("span", { class: "verdict" }, v.sym), `${q.text} — None of these`),
+      );
+      // Name the options you'd most expect to see here.
+      const likely = q.options
+        .map((o) => ({ o, p: seeProbability(db, country, q, o) }))
+        .filter((x) => x.p >= 0.25) // hand-entered common / widespread only
+        .sort((a, b) => b.p - a.p)
+        .map((x) => x.o.label.toLowerCase());
+      row.append(el("p", { class: "muted small" }, likely.length
+        ? `In ${country.title} you'd often expect: ${likely.join(", ")}.`
+        : `None of these are especially common in ${country.title}.`));
+      why.append(row);
+      continue;
+    }
+    // Several picks on a "multiple" question: only the best fit counts, so show that one.
+    const oids = q.multiple ? [bestOption(db, country, q, ans, state.confidence[qid])?.option.id] : asArray(ans);
+    for (const oid of oids) {
       const opt = q.options.find((o) => o.id === oid);
       if (!opt) continue;
       any = true;
@@ -633,6 +686,7 @@ async function main() {
       delete state.answers[qid];
     } else if (q.type !== "sliders") {
       // Drop options that no longer exist (e.g. landscape "dirt" moved to roads).
+      if (isNoneAnswer(q, ans) && q.none) continue;
       const kept = asArray(ans).filter((oid) => q.options.some((o) => o.id === oid));
       if (!kept.length) delete state.answers[qid];
       else if (Array.isArray(ans)) state.answers[qid] = kept;
@@ -640,13 +694,7 @@ async function main() {
   }
   syncHistory();
 
-  $("#resetBtn").addEventListener("click", () => {
-    state = freshState();
-    draftFor = null;
-    $("#searchInput").value = "";
-    $("#searchResults").replaceChildren();
-    update();
-  });
+  $("#resetBtn").addEventListener("click", startOver);
   $("#searchForm").addEventListener("submit", (e) => {
     e.preventDefault();
     renderSearch($("#searchInput").value.trim());

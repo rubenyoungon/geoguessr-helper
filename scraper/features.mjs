@@ -8,14 +8,20 @@
 //   the matching tips are shown as supporting evidence.
 //   Plonk It options may set `prevalence: "<field>"`: countries with that
 //   field in countries.mjs ("widespread" / "common" / "regional") are scored
-//   by it; the rest fall back to the guide text.
+//   by it; the rest fall back to the guide text, or count as rare when the
+//   option sets `guideFallback: false` (guides mention it in comparisons).
 //
 // miss: likelihood when a curated option doesn't match (default near zero).
 // confidence: { default } adds a "how sure are you?" slider (0-100%) that
 //             scales the mismatch penalty instead of a fixed miss.
 // type "single": the player picks one option.
+// multiple:      single questions only: the player may tick several options
+//                when unsure; a country only needs to fit one of them.
 // type "multi":  the player ticks every option they can see; unticked
 //                options are not held against any country.
+// none:          multi questions only: adds a "None of these" answer that
+//                counts against countries where the options are common.
+//                Leave it off when absence says nothing (no curve, no chevron).
 // type "sliders": the player sets each of `axes` on a 0-100 scale; each
 //                country has a [lo, hi] range per axis in countries.mjs.
 //                Question-level `patterns` collect evidence tips only.
@@ -25,15 +31,16 @@
 export const QUESTIONS = [
   {
     id: "continent",
+    multiple: true, // unsure between two? tick both; the best fit counts
     text: "Which continent does it feel like?",
-    help: "Go with your gut — the overall look of roads, buildings, cars and landscape. It counts less than hard clues.",
+    help: "Go with your gut — the overall look of roads, buildings, cars and landscape. Torn between two? Tick both. It counts less than hard clues.",
     type: "single",
     source: "curated",
     note: "Plonk It category",
     badge: "Gut feeling",
     // A vibe can easily be wrong (Russia vs. Eastern Europe, Mexico vs. South
-    // America), so the player says how sure they are; 60% ≈ a 0.06 penalty.
-    confidence: { default: 60 },
+    // America), so the player says how sure they are; 50% ≈ a 0.1 penalty.
+    confidence: { default: 50 },
     cost: 0.6, // quickest call to make, so it tends to be asked first
     options: [
       { id: "na", label: "North & Central America (incl. Mexico, Caribbean)", match: { field: "continents", value: "North America" } },
@@ -182,17 +189,6 @@ export const QUESTIONS = [
     ],
   },
   {
-    id: "speed",
-    text: "Are speed limits in miles or kilometres?",
-    help: "Look for 'MPH' or 'Speed Limit' signs with values like 25, 35, 45, 55 — or a plain number in a red circle (km/h).",
-    type: "single",
-    source: "curated",
-    options: [
-      { id: "mph", label: "Miles (mph)", match: { field: "speed", value: "mph" } },
-      { id: "kmh", label: "Kilometres (km/h)", match: { field: "speed", value: "kmh" } },
-    ],
-  },
-  {
     id: "stop",
     text: "What does the stop sign say?",
     type: "single",
@@ -282,8 +278,9 @@ export const QUESTIONS = [
   },
   {
     id: "car",
+    none: true, // "None of these" is a real answer, not a skip
     text: "Anything distinctive about the Google car (look down)?",
-    help: "Tick everything you can see. Unticked items are not held against any country.",
+    help: "Tick everything you can see. Unticked items aren't held against any country — but \"None of these\" (you looked and saw nothing) is.",
     type: "multi",
     source: "plonkit",
     options: [
@@ -304,7 +301,7 @@ export const QUESTIONS = [
     source: "curated",
     note: "hand-entered range",
     badge: "Gut feeling",
-    confidence: { default: 60 },
+    confidence: { default: 50 },
     axes: [
       {
         id: "temp",
@@ -336,8 +333,8 @@ export const QUESTIONS = [
     source: "curated",
     note: "hand-entered range",
     badge: "Gut feeling",
-    // Road quality varies a lot within a country, so it starts softer than climate.
-    confidence: { default: 40 },
+    // Road quality varies a lot within a country, so a mismatch counts softly.
+    confidence: { default: 50 },
     axes: [
       {
         id: "road",
@@ -356,15 +353,17 @@ export const QUESTIONS = [
   },
   {
     id: "landscape",
+    none: true, // "None of these" is a real answer, not a skip
     text: "What do you see in the landscape?",
-    help: "Tick everything that applies.",
+    help: "Tick everything that applies, or \"None of these\" if you can see clearly and none are there.",
     type: "multi",
     source: "plonkit",
     // Desert lives in the climate question and dirt roads in the road question,
     // so they aren't counted twice.
     options: [
-      { id: "snow", label: "Snow", patterns: ["\\bsnow"] },
-      { id: "palm", label: "Palm trees", patterns: ["palm trees?", "\\bpalms\\b"] },
+      // Skip snow poles / stakes / chains etc. — road equipment, not snow you can see.
+      { id: "snow", prevalence: "snow", guideFallback: false, label: "Snow", patterns: ["\\bsnow(?!\\s*(poles?|stakes?|markers?|fences?|chains?|ploughs?|plows?|tyres?|tires?)\\b)"] },
+      { id: "palm", prevalence: "palms", guideFallback: false, label: "Palm trees", patterns: ["palm trees?", "\\bpalms\\b"] },
       {
         id: "redsoil",
         label: "Red soil",
@@ -376,7 +375,7 @@ export const QUESTIONS = [
           "\\b(soil|dirt|earth|clay)\\b[^.]{0,40}\\b(red|reddish|orange)\\b",
         ],
       },
-      { id: "rice", label: "Rice paddies", patterns: ["rice (paddies|paddy|fields?)", "paddy fields?"] },
+      { id: "rice", prevalence: "rice", guideFallback: false, label: "Rice paddies", patterns: ["rice (paddies|paddy|fields?)", "paddy fields?"] },
     ],
   },
   {
@@ -392,8 +391,9 @@ export const QUESTIONS = [
   },
   {
     id: "vehicles",
+    none: true, // "None of these" is a real answer, not a skip
     text: "Any distinctive vehicles on the road?",
-    help: "Tick everything you can see.",
+    help: "Tick everything you can see, or \"None of these\" if there's traffic but none of these.",
     type: "multi",
     source: "plonkit",
     options: [
@@ -404,8 +404,9 @@ export const QUESTIONS = [
   },
   {
     id: "edges",
+    none: true, // "None of these" is a real answer, not a skip
     text: "Anything unusual about the road edges?",
-    help: "Tick everything you can see.",
+    help: "Tick everything you can see, or \"None of these\" if the edges are clearly visible and plain.",
     type: "multi",
     source: "plonkit",
     options: [
@@ -423,6 +424,22 @@ export const QUESTIONS = [
       { id: "yellowblack", label: "Yellow & black", patterns: ["(yellow|black) (and|&|on|with) (black|yellow) chevrons?", "yellow chevrons?"] },
       { id: "redwhite", label: "Red & white", patterns: ["(red|white) (and|&|on|with) (white|red) chevrons?", "red chevrons?"] },
       { id: "blackwhite", label: "Black & white", patterns: ["black (and|&|on|with) white chevrons?", "white (and|&|on|with) black chevrons?"] },
+      {
+        id: "blueyellow",
+        label: "Blue with yellow arrows",
+        // Guides of other countries mention these in comparisons, so the
+        // hand-entered level in countries.mjs decides; text is evidence only.
+        prevalence: "chevblueyellow",
+        guideFallback: false,
+        patterns: ["yellow arrows on a blue", "(blue and yellow|yellow on blue|yellow and blue) chevrons?"],
+      },
+      {
+        id: "bluewhite",
+        label: "Blue with white arrows",
+        prevalence: "chevbluewhite",
+        guideFallback: false,
+        patterns: ["white arrows on a blue", "blue with white (arrows|chevrons?)", "(blue and white|white on blue) chevrons?"],
+      },
     ],
   },
 ];
